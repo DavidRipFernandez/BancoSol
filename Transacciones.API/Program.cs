@@ -1,21 +1,48 @@
+using FluentValidation;
+using Serilog;
+using Serilog.Events;
+using Transacciones.API.Middleware;
 using Transacciones.Infrastructure;
 
-var builder = WebApplication.CreateBuilder(args);
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .WriteTo.Console()
+    .WriteTo.File("logs/transacciones-.log", rollingInterval: RollingInterval.Day)
+    .CreateLogger();
 
-builder.Services.AddControllers();
-builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-var app = builder.Build();
-
-if (app.Environment.IsDevelopment())
+try
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    var builder = WebApplication.CreateBuilder(args);
 
-app.UseHttpsRedirection();
-app.UseAuthorization();
-app.MapControllers();
-app.Run();
+    builder.Host.UseSerilog();
+
+    builder.Services.AddControllers();
+    builder.Services.AddInfrastructure(builder.Configuration);
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen();
+    builder.Services.AddMemoryCache();
+    builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
+    var app = builder.Build();
+
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
+
+    app.UseMiddleware<ExceptionMiddleware>();
+    app.UseHttpsRedirection();
+    app.UseAuthorization();
+    app.MapControllers();
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "La aplicación terminó inesperadamente");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
